@@ -1,0 +1,17 @@
+node_modules/
+dist/
+
+# Personal resume data - NEVER commit
+data/
+config.yaml
+
+# Environment
+.env
+.env.local
+
+# Generated files
+*.pdf
+
+# Editor / tool state
+.claude/
+.DS_Store
