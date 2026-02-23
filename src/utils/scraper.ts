@@ -21,13 +21,53 @@ export function isUrl(value: string): boolean {
   }
 }
 
-function isLinkedInUrl(url: string): boolean {
+export function isLinkedInUrl(url: string): boolean {
   try {
     const { hostname } = new URL(url)
     return hostname === 'linkedin.com' || hostname.endsWith('.linkedin.com')
   } catch {
     return false
   }
+}
+
+interface JinaResponse {
+  readonly data: {
+    readonly url: string
+    readonly title: string
+    readonly content: string
+  }
+}
+
+async function scrapeWithJina(url: string, signal: AbortSignal): Promise<ScrapeResult> {
+  const headers: Record<string, string> = {
+    'Accept': 'application/json',
+    'X-Engine': 'browser',
+    'X-No-Cache': 'true',
+  }
+  if (process.env.JINA_API_KEY) {
+    headers['Authorization'] = `Bearer ${process.env.JINA_API_KEY}`
+  }
+
+  const response = await fetch(`https://r.jina.ai/${url}`, { signal, headers })
+
+  if (!response.ok) {
+    throw new CliError(
+      `Jina Reader failed (HTTP ${response.status})`,
+      'Paste the content manually instead',
+    )
+  }
+
+  const json = (await response.json()) as JinaResponse
+  const text = json.data?.content?.trim()
+
+  if (!text) {
+    throw new CliError(
+      'No text content returned by Jina Reader',
+      'Paste the content manually instead',
+    )
+  }
+
+  return { url, text, title: json.data.title ?? '' }
 }
 
 export function stripHtml(html: string): string {
@@ -64,15 +104,28 @@ function extractTitle(html: string): string {
 }
 
 export async function scrapeUrl(url: string): Promise<ScrapeResult> {
-  if (isLinkedInUrl(url)) {
-    throw new CliError(
-      'LinkedIn pages require authentication and cannot be scraped',
-      'Copy the profile text from LinkedIn and paste it manually instead',
-    )
-  }
-
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+
+  if (isLinkedInUrl(url)) {
+    try {
+      return await scrapeWithJina(url, controller.signal)
+    } catch (error) {
+      if (error instanceof CliError) throw error
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new CliError(
+          'Request timed out after 15 seconds',
+          'Paste the content manually instead',
+        )
+      }
+      throw new CliError(
+        'Could not fetch LinkedIn page',
+        'Paste the content manually instead',
+      )
+    } finally {
+      clearTimeout(timeout)
+    }
+  }
 
   try {
     const response = await fetch(url, {

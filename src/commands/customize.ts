@@ -144,39 +144,65 @@ export async function customizeCommand(opts: CustomizeOptions): Promise<void> {
   const doBulletRewrite = await confirm({ message: 'Rewrite bullets to match JD language?', default: true })
 
   if (doBulletRewrite) {
+    // Collect all bullets to rewrite
+    const bulletsToRewrite: Array<{
+      readonly bulletId: string
+      readonly original: string
+      readonly company: string
+      readonly title: string
+    }> = []
+
     for (const expRef of profile.experience) {
       const masterExp = master.experience.find(e => e.id === expRef.id)
       if (!masterExp) continue
-
-      console.log(chalk.bold(`\n  ${masterExp.company} — ${masterExp.title}`))
-
       for (const bulletId of expRef.bullets) {
         const bullet = masterExp.bullets.find(b => b.id === bulletId)
         if (!bullet) continue
-
-        const rewriteSpin = spinner(`Rewriting: ${bullet.text.slice(0, 50)}...`)
-        const rewritten = await rewriteBullet(
-          bullet.text,
-          analysis.keyTerminology,
-          analysis.emphasisAreas,
-        )
-        rewriteSpin.stop()
-
-        displayBulletDiff(bullet.text, rewritten)
-
-        const accept = await confirm({ message: 'Accept this rewrite?', default: true })
-
-        if (accept) {
-          bulletOverrides.set(bulletId, rewritten)
-        }
-
-        changes.push({
-          bulletId,
-          original: bullet.text,
-          rewritten,
-          accepted: accept,
-        })
+        bulletsToRewrite.push({ bulletId, original: bullet.text, company: masterExp.company, title: masterExp.title })
       }
+    }
+
+    // Generate all rewrites in parallel
+    const rewriteSpin = spinner(`Rewriting ${bulletsToRewrite.length} bullets...`)
+    const rewrites = await Promise.all(
+      bulletsToRewrite.map(b =>
+        rewriteBullet(b.original, analysis.keyTerminology, analysis.emphasisAreas)
+          .then(rewritten => ({ ...b, rewritten })),
+      ),
+    )
+    rewriteSpin.succeed(`Rewrote ${rewrites.length} bullets`)
+
+    // Print all diffs grouped by company
+    let lastCompany = ''
+    for (const r of rewrites) {
+      if (r.company !== lastCompany) {
+        console.log(chalk.bold(`\n  ${r.company} — ${r.title}`))
+        lastCompany = r.company
+      }
+      displayBulletDiff(r.original, r.rewritten)
+    }
+
+    // Single multiselect: pre-checked = accept, unchecked = reject
+    const kept = await checkbox({
+      message: 'Keep these rewrites? (uncheck to discard)',
+      choices: rewrites.map(r => ({
+        name: `[${r.company}] ${r.original.slice(0, 55)}… → ${r.rewritten.slice(0, 55)}…`,
+        value: r.bulletId,
+        checked: true,
+      })),
+    })
+
+    const keptSet = new Set(kept)
+    for (const r of rewrites) {
+      if (keptSet.has(r.bulletId)) {
+        bulletOverrides.set(r.bulletId, r.rewritten)
+      }
+      changes.push({
+        bulletId: r.bulletId,
+        original: r.original,
+        rewritten: r.rewritten,
+        accepted: keptSet.has(r.bulletId),
+      })
     }
   }
 

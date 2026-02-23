@@ -1,5 +1,5 @@
 import { input, confirm, editor } from '@inquirer/prompts'
-import { isUrl, scrapeUrl } from './scraper.js'
+import { isUrl, isLinkedInUrl, scrapeUrl } from './scraper.js'
 import { getCachedScrape, cacheScrape } from './url-cache.js'
 import { spinner, warn, info } from './terminal.js'
 import chalk from 'chalk'
@@ -47,7 +47,10 @@ export async function collectTextInput(options: CollectTextInputOptions): Promis
     }
 
     // Fetch fresh
-    const spin = spinner('Fetching content from URL...')
+    const spinMessage = isLinkedInUrl(trimmedUrl)
+      ? 'Fetching via Jina Reader (browser rendering)...'
+      : 'Fetching content from URL...'
+    const spin = spinner(spinMessage)
     try {
       const result = await scrapeUrl(trimmedUrl)
       const titleDisplay = result.title ? `"${result.title}"` : result.url

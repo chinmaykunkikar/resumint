@@ -11,7 +11,7 @@ You maintain a single master resume in YAML. resumint analyzes job descriptions,
 ## Features
 
 - **JD analysis** - Extracts skills, terminology, seniority level, and domain fit from any job posting
-- **Bullet rewriting** - Rephrases your real experience to mirror JD language (never fabricates)
+- **Batch bullet rewriting** - Rewrites all bullets in parallel, then shows a single checkbox to keep or discard each one
 - **Profile matching** - Auto-selects the best resume profile for each role
 - **Cover letters** - Generates tailored cover letters that reference specific JD requirements
 - **LinkedIn outreach** - Creates personalized connection notes and follow-up messages
@@ -116,7 +116,7 @@ outputDir: data/output
 1. **Master resume** - You write all your experience once in `data/master-resume.yaml`. Every bullet, project, and skill lives here.
 2. **Profiles** - Each profile is a curated view: which summary, which bullets, which skills to include. Think of it as a lens on the same data.
 3. **JD analysis** - resumint parses the job description and classifies each required skill as EXACT match, ADJACENT (same ecosystem), LEARNABLE, or DOMAIN_CHANGE.
-4. **Bullet rewriting** - In `customize` mode, each bullet is rewritten to naturally incorporate the JD's terminology without fabricating experience.
+4. **Bullet rewriting** - In `customize` mode, all bullets are rewritten in parallel to incorporate the JD's terminology. A single checkbox lets you keep or discard each rewrite before generating the PDF.
 5. **PDF compilation** - The final resume is compiled to PDF via LaTeX, and you can iteratively revise it in a feedback loop.
 
 ## License
