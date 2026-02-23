@@ -61,6 +61,10 @@ async function callViaApi(prompt: string, maxTokens: number): Promise<string> {
   return textBlock.text.trim()
 }
 
+export function isParallelSafe(): boolean {
+  return detectBackend() === 'api'
+}
+
 export async function callLlm(
   prompt: string,
   options?: { maxTokens?: number },

@@ -19,6 +19,7 @@ import type { Company, JdAnalysis } from '../data/schema.js'
 import { collectTextInput } from '../utils/input.js'
 import { getCachedAnalysis, cacheAnalysis } from '../utils/url-cache.js'
 import { revisionLoop } from '../utils/revise.js'
+import { isParallelSafe } from '../utils/claude.js'
 import { heading, success, warn, errorMsg, spinner, info, domainFitBadge } from '../utils/terminal.js'
 import chalk from 'chalk'
 
@@ -162,14 +163,26 @@ export async function customizeCommand(opts: CustomizeOptions): Promise<void> {
       }
     }
 
-    // Generate all rewrites in parallel
+    // Generate rewrites — parallel for API backend, sequential for claude-code
+    // (claude-code spawns child processes that can open /dev/tty for auth,
+    //  corrupting terminal raw mode and hanging the checkbox prompt)
     const rewriteSpin = spinner(`Rewriting ${bulletsToRewrite.length} bullets...`)
-    const rewrites = await Promise.all(
-      bulletsToRewrite.map(b =>
-        rewriteBullet(b.original, analysis.keyTerminology, analysis.emphasisAreas)
-          .then(rewritten => ({ ...b, rewritten })),
-      ),
-    )
+    let rewrites: Array<{ bulletId: string; original: string; company: string; title: string; rewritten: string }>
+
+    if (isParallelSafe()) {
+      rewrites = await Promise.all(
+        bulletsToRewrite.map(b =>
+          rewriteBullet(b.original, analysis.keyTerminology, analysis.emphasisAreas)
+            .then(rewritten => ({ ...b, rewritten })),
+        ),
+      )
+    } else {
+      rewrites = []
+      for (const b of bulletsToRewrite) {
+        const rewritten = await rewriteBullet(b.original, analysis.keyTerminology, analysis.emphasisAreas)
+        rewrites.push({ ...b, rewritten })
+      }
+    }
     rewriteSpin.succeed(`Rewrote ${rewrites.length} bullets`)
 
     // Print all diffs grouped by company
